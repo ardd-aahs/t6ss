@@ -3,7 +3,7 @@
 # cblaster local database construction and T6SS cluster searches (Vp references)
 # Description:
 #   1. Build local DIAMOND databases from Vibrio genomes
-#   2. Search for T6SS-1 and T6SS-2 clusters using V. parahaemolyticus references
+#   2. Search for T6SS-1 and T6SS-2 clusters using V. parahaemolyticus PH1339
 ###############################################################################
 
 # =========================
