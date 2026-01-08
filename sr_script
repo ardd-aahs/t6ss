@@ -17,7 +17,6 @@ library(extrafont)
 ############################
 ## 2. Data Import
 ############################
-setwd("C:/Users/conta/OneDrive/Desktop/NFRDI/Survival using different strains/Compilation of Data")
 
 df <- read.csv("survival_rate_challenge_experiment.csv", stringsAsFactors = FALSE)
 
