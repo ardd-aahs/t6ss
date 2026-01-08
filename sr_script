@@ -19,7 +19,7 @@ library(extrafont)
 ############################
 setwd("C:/Users/conta/OneDrive/Desktop/NFRDI/Survival using different strains/Compilation of Data")
 
-df <- read.csv("sr_all_data_2025.csv", stringsAsFactors = FALSE)
+df <- read.csv("survival_rate_challenge_experiment.csv", stringsAsFactors = FALSE)
 
 ############################
 ## 3. Factor Processing
