@@ -1,0 +1,179 @@
+############################################################
+## Survival Rate Analysis Across Vibrio Strains
+############################################################
+
+############################
+## 1. Libraries
+############################
+library(tidyverse)
+library(ggplot2)
+library(patchwork)
+library(FSA)            # Dunn's test
+library(multcompView)
+library(ggpubr)
+library(ggsci)
+library(extrafont)
+
+############################
+## 2. Data Import
+############################
+setwd("C:/Users/conta/OneDrive/Desktop/NFRDI/Survival using different strains/Compilation of Data")
+
+df <- read.csv("sr_all_data_2025.csv", stringsAsFactors = FALSE)
+
+############################
+## 3. Factor Processing
+############################
+df$time <- factor(
+  df$time,
+  levels = c("0","4","8","12","16","20","24","28","32",
+             "36","40","44","48","52","56","60","64","68","72")
+)
+
+df$strain <- factor(
+  df$strain,
+  levels = c("control","ph1273","ph1339","ph1401","ph1409"),
+  labels = c("Control", "Vp PH1273", "Vp PH1339", "Vc PH1401", "Vc PH1409")
+)
+
+############################
+## 4. Summary Statistics
+############################
+summary_df <- df %>%
+  group_by(time, strain) %>%
+  summarise(
+    mean_sr = mean(sr, na.rm = TRUE),
+    se_sr   = sd(sr, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+############################
+## 5. Dunn’s Test (Selected Time Points)
+############################
+selected_times <- c("12", "24", "36", "48", "60", "72")
+
+sig_letters_df <- purrr::map_dfr(selected_times, function(tp) {
+
+  df_tp <- df %>% filter(time == tp)
+
+  dunn_res <- dunnTest(sr ~ strain, data = df_tp, method = "bonferroni")
+
+  pvals <- setNames(
+    dunn_res$res$P.adj,
+    gsub(" ", "", dunn_res$res$Comparison)
+  )
+
+  letters <- multcompLetters(pvals, threshold = 0.05)$Letters
+
+  tibble(
+    strain = names(letters),
+    letters = letters,
+    time = tp
+  )
+})
+
+summary_df <- summary_df %>%
+  left_join(sig_letters_df, by = c("strain", "time"))
+
+############################
+## 6. Color & Shape Palettes
+############################
+strain_colors <- c(
+  "Control"   = "#173F5F",
+  "Vp PH1273" = "#20639B",
+  "Vp PH1339" = "#ED553B",
+  "Vc PH1401" = "#3CAEA3",
+  "Vc PH1409" = "#F6D55C"
+)
+
+strain_shapes <- c(
+  "Control"   = 16,
+  "Vp PH1273" = 15,
+  "Vp PH1339" = 17,
+  "Vc PH1401" = 18,
+  "Vc PH1409" = 8
+)
+
+############################
+## 7. Bar Plot (Selected Time Points)
+############################
+plot_bar <- summary_df %>%
+  filter(time %in% selected_times) %>%
+  ggplot(aes(x = time, y = mean_sr, fill = strain)) +
+
+  geom_col(position = position_dodge(0.8), width = 0.7) +
+
+  geom_errorbar(
+    aes(ymin = mean_sr - se_sr, ymax = mean_sr + se_sr),
+    position = position_dodge(0.8),
+    width = 0.2
+  ) +
+
+  geom_text(
+    aes(y = mean_sr + se_sr + 3.5, label = letters),
+    position = position_dodge(0.8),
+    size = 3.5,
+    family = "Arial"
+  ) +
+
+  scale_fill_manual(values = strain_colors) +
+  scale_y_continuous(limits = c(0, 105), breaks = seq(0, 105, 10)) +
+
+  labs(
+    x = "Hours Post-infection",
+    y = "Survival Rate (%)",
+    fill = "Strain"
+  ) +
+
+  theme_classic(base_family = "Arial") +
+  theme(
+    axis.text  = element_text(face = "bold", size = 12),
+    axis.title = element_text(face = "bold", size = 12),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+############################
+## 8. Line Plot (Full Time Course)
+############################
+plot_line <- ggplot(
+  summary_df,
+  aes(x = time, y = mean_sr, color = strain, shape = strain, group = strain)
+) +
+
+  geom_line(linewidth = 0.6) +
+  geom_point(size = 2) +
+
+  geom_errorbar(
+    aes(ymin = mean_sr - se_sr, ymax = mean_sr + se_sr),
+    width = 0.2,
+    linewidth = 0.5
+  ) +
+
+  scale_color_manual(values = strain_colors) +
+  scale_shape_manual(values = strain_shapes) +
+  scale_y_continuous(limits = c(0, 105), breaks = seq(0, 105, 10)) +
+
+  labs(
+    x = "Hours Post-infection",
+    y = "Survival Rate (%)",
+    color = "Strain",
+    shape = "Strain"
+  ) +
+
+  theme_classic2(base_family = "Arial") +
+  theme(
+    axis.text  = element_text(face = "bold", size = 12),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.line  = element_line(size = 0.75),
+    legend.position = "right"
+  )
+
+############################
+## 9. Combined Figure
+############################
+final_plot <- plot_line / plot_bar +
+  plot_annotation(tag_levels = "A") &
+  theme(plot.tag = element_text(face = "bold", size = 12))
+
+print(final_plot)
