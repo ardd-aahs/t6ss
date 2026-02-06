@@ -1,82 +1,33 @@
-############################################################
-## Survival Rate Analysis Across Vibrio Strains
-############################################################
-
-############################
-## 1. Libraries
-############################
-library(tidyverse)
+# ================= Libraries =================
 library(ggplot2)
+library(dplyr)
 library(patchwork)
-library(FSA)            # Dunn's test
-library(multcompView)
-library(ggpubr)
-library(ggsci)
-library(extrafont)
+library(FSA)            # Dunn test
+library(multcompView)   # significance letters
+library(purrr)          # map_dfr
+library(ggpubr)         # theme_classic2
 
-############################
-## 2. Data Import
-############################
+# ================= Load Data =================
+setwd("C:/Users/conta/OneDrive/Desktop/NFRDI/Survival using different strains/Compilation of Data")
+df <- read.csv("sr_all_data_2025.csv", stringsAsFactors = FALSE)
 
-df <- read.csv("survival_rate_challenge_experiment.csv", stringsAsFactors = FALSE)
+# ================= Factor Formatting =================
+df$time <- factor(df$time, levels = c("0","4","8","12","16","20","24",
+                                      "28","32","36","40","44","48",
+                                      "52","56","60","64","68","72"))
 
-############################
-## 3. Factor Processing
-############################
-df$time <- factor(
-  df$time,
-  levels = c("0","4","8","12","16","20","24","28","32",
-             "36","40","44","48","52","56","60","64","68","72")
-)
+# Set strain order FIRST (raw names)
+df$strain <- factor(df$strain,
+                    levels = c("control","ph1273","ph1339","ph1401","ph1409"))
 
-df$strain <- factor(
-  df$strain,
-  levels = c("control","ph1273","ph1339","ph1401","ph1409"),
-  labels = c("Control", "Vp PH1273", "Vp PH1339", "Vc PH1401", "Vc PH1409")
-)
+# Rename strains (keeps the correct order!)
+levels(df$strain) <- c("Control", "Vp PH1273", "Vp PH1339", "Vc PH1401", "Vc PH1409")
 
-############################
-## 4. Summary Statistics
-############################
-summary_df <- df %>%
-  group_by(time, strain) %>%
-  summarise(
-    mean_sr = mean(sr, na.rm = TRUE),
-    se_sr   = sd(sr, na.rm = TRUE) / sqrt(n()),
-    .groups = "drop"
-  )
+# Enforce final order explicitly
+df$strain <- factor(df$strain,
+                    levels = c("Control", "Vp PH1273", "Vp PH1339", "Vc PH1401", "Vc PH1409"))
 
-############################
-## 5. Dunn’s Test (Selected Time Points)
-############################
-selected_times <- c("12", "24", "36", "48", "60", "72")
-
-sig_letters_df <- purrr::map_dfr(selected_times, function(tp) {
-
-  df_tp <- df %>% filter(time == tp)
-
-  dunn_res <- dunnTest(sr ~ strain, data = df_tp, method = "bonferroni")
-
-  pvals <- setNames(
-    dunn_res$res$P.adj,
-    gsub(" ", "", dunn_res$res$Comparison)
-  )
-
-  letters <- multcompLetters(pvals, threshold = 0.05)$Letters
-
-  tibble(
-    strain = names(letters),
-    letters = letters,
-    time = tp
-  )
-})
-
-summary_df <- summary_df %>%
-  left_join(sig_letters_df, by = c("strain", "time"))
-
-############################
-## 6. Color & Shape Palettes
-############################
+# ================= Colors & Shapes =================
 strain_colors <- c(
   "Control"   = "#173F5F",
   "Vp PH1273" = "#20639B",
@@ -93,86 +44,131 @@ strain_shapes <- c(
   "Vc PH1409" = 8
 )
 
-############################
-## 7. Bar Plot (Selected Time Points)
-############################
-plot_bar <- summary_df %>%
-  filter(time %in% selected_times) %>%
-  ggplot(aes(x = time, y = mean_sr, fill = strain)) +
-
-  geom_col(position = position_dodge(0.8), width = 0.7) +
-
-  geom_errorbar(
-    aes(ymin = mean_sr - se_sr, ymax = mean_sr + se_sr),
-    position = position_dodge(0.8),
-    width = 0.2
-  ) +
-
-  geom_text(
-    aes(y = mean_sr + se_sr + 3.5, label = letters),
-    position = position_dodge(0.8),
-    size = 3.5,
-    family = "Arial"
-  ) +
-
-  scale_fill_manual(values = strain_colors) +
-  scale_y_continuous(limits = c(0, 105), breaks = seq(0, 105, 10)) +
-
-  labs(
-    x = "Hours Post-infection",
-    y = "Survival Rate (%)",
-    fill = "Strain"
-  ) +
-
-  theme_classic(base_family = "Arial") +
-  theme(
-    axis.text  = element_text(face = "bold", size = 12),
-    axis.title = element_text(face = "bold", size = 12),
-    legend.title = element_text(face = "bold"),
-    legend.position = "right"
+# ================= Summarize Data (All Timepoints) =================
+data.sum <- df %>%
+  group_by(time, strain) %>%
+  summarise(
+    mean_sr = mean(sr, na.rm = TRUE),
+    se_sr   = sd(sr, na.rm = TRUE) / sqrt(sum(!is.na(sr))),
+    .groups = "drop"
   )
 
-############################
-## 8. Line Plot (Full Time Course)
-############################
-plot_line <- ggplot(
-  summary_df,
-  aes(x = time, y = mean_sr, color = strain, shape = strain, group = strain)
-) +
+# Re-enforce strain order (extra safety)
+data.sum$strain <- factor(data.sum$strain, levels = levels(df$strain))
 
+# ================= Line Plot (All Timepoints) =================
+plot_sr_fx <- ggplot(data.sum,
+                     aes(x = time, y = mean_sr, color = strain, shape = strain, group = strain)) +
   geom_line(linewidth = 0.6) +
   geom_point(size = 2) +
-
-  geom_errorbar(
-    aes(ymin = mean_sr - se_sr, ymax = mean_sr + se_sr),
-    width = 0.2,
-    linewidth = 0.5
-  ) +
-
-  scale_color_manual(values = strain_colors) +
-  scale_shape_manual(values = strain_shapes) +
-  scale_y_continuous(limits = c(0, 105), breaks = seq(0, 105, 10)) +
-
-  labs(
-    x = "Hours Post-infection",
-    y = "Survival Rate (%)",
-    color = "Strain",
-    shape = "Strain"
-  ) +
-
-  theme_classic2(base_family = "Arial") +
+  geom_errorbar(aes(ymin = mean_sr - se_sr, ymax = mean_sr + se_sr),
+                width = 0.2, linewidth = 0.5) +
+  scale_color_manual(values = strain_colors, breaks = levels(df$strain)) +
+  scale_shape_manual(values = strain_shapes, breaks = levels(df$strain)) +
+  scale_y_continuous(limits = c(0, 105), breaks = seq(0, 105, by = 10)) +
+  labs(x = "Hours Post-infection",
+       y = "Survival Rate (%)",
+       color = "Strain",
+       shape = "Strain") +
+  theme_classic2() +
   theme(
-    axis.text  = element_text(face = "bold", size = 12),
-    axis.title = element_text(face = "bold", size = 12),
-    axis.line  = element_line(size = 0.75),
+    axis.text.x = element_text(angle = 0, hjust = 0.5, family = "Arial", face = "bold", size = 12),
+    axis.text.y = element_text(family = "Arial", face = "bold", size = 12),
+    axis.title.x = element_text(family = "Arial", face = "bold", size = 12, margin = margin(t = 20)),
+    axis.title.y = element_text(family = "Arial", face = "bold", size = 12, margin = margin(r = 10)),
+    legend.title = element_text(family = "Arial", face = "bold", size = 12),
+    legend.text = element_text(family = "Arial", size = 12),
+    legend.position = "right",
+    panel.grid = element_blank(),
+    axis.line = element_line(colour = "black", linewidth = 0.75)
+  )
+
+# ================= Selected Time Points for Barplot =================
+selected_times <- c("12", "24", "36", "48", "60", "72")
+
+summary_df <- df %>%
+  filter(time %in% selected_times) %>%
+  group_by(time, strain) %>%
+  summarise(
+    mean_sr = mean(sr, na.rm = TRUE),
+    se_sr   = sd(sr, na.rm = TRUE) / sqrt(sum(!is.na(sr))),
+    .groups = "drop"
+  )
+
+# Convert time to numeric for plotting
+summary_df$time <- as.numeric(as.character(summary_df$time))
+
+# IMPORTANT: enforce strain order again
+summary_df$strain <- factor(summary_df$strain, levels = levels(df$strain))
+
+# ================= Dunn Test Letters per Timepoint =================
+sig_letters_df <- map_dfr(selected_times, function(tp) {
+  
+  df_tp <- df %>% filter(time == tp)
+  
+  dunn_res <- FSA::dunnTest(sr ~ strain, data = df_tp, method = "bonferroni")
+  
+  # Correct comparison formatting (do not remove internal spaces!)
+  pval_vector <- setNames(dunn_res$res$P.adj,
+                          gsub(" - ", "-", dunn_res$res$Comparison))
+  
+  letters_list <- multcompView::multcompLetters(pval_vector, threshold = 0.05)
+  
+  data.frame(
+    strain  = names(letters_list$Letters),
+    letters = letters_list$Letters,
+    time    = as.numeric(tp),
+    stringsAsFactors = FALSE
+  )
+})
+
+# Enforce strain order in letters df too (THIS FIXES THE BARPLOT ORDER ISSUE)
+sig_letters_df$strain <- factor(sig_letters_df$strain, levels = levels(df$strain))
+
+# ================= Merge Letters =================
+summary_df <- summary_df %>%
+  left_join(sig_letters_df, by = c("strain", "time"))
+
+# ================= Barplot (Selected Timepoints) =================
+plot_sr_hpi <- ggplot(summary_df, aes(x = factor(time), y = mean_sr, fill = strain)) +
+  geom_bar(stat = "identity",
+           position = position_dodge(width = 0.8),
+           width = 0.7) +
+  geom_errorbar(aes(ymin = mean_sr - se_sr, ymax = mean_sr + se_sr),
+                width = 0.2,
+                position = position_dodge(width = 0.8)) +
+  geom_text(aes(y = mean_sr + se_sr + 3.5, label = letters),
+            position = position_dodge(width = 0.8),
+            size = 3.5, color = "black", family = "Arial") +
+  scale_fill_manual(values = strain_colors, breaks = levels(df$strain)) +
+  scale_y_continuous(limits = c(0, 105), breaks = seq(0, 105, by = 10)) +
+  labs(x = "Hours Post-infection",
+       y = "Survival Rate (%)",
+       fill = "Strain") +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, family = "Arial", face = "bold", size = 12),
+    axis.text.y = element_text(family = "Arial", face = "bold", size = 12),
+    axis.title.x = element_text(family = "Arial", face = "bold", size = 12, margin = margin(t = 20)),
+    axis.title.y = element_text(family = "Arial", face = "bold", size = 12, margin = margin(r = 10)),
+    legend.title = element_text(family = "Arial", face = "bold", size = 12),
+    legend.text = element_text(family = "Arial", size = 12),
     legend.position = "right"
   )
 
-############################
-## 9. Combined Figure
-############################
-final_plot <- plot_line / plot_bar +
+# ================= Combine Plots =================
+combined_plot <- plot_sr_fx / plot_sr_hpi +
   plot_annotation(tag_levels = "A") &
-  theme(plot.tag = element_text(face = "bold", size = 12))
+  theme(plot.tag = element_text(size = 12, face = "bold"))
 
-print(final_plot)
+# ================= Display =================
+print(combined_plot)
+
+# ================= Optional Debug Checks =================
+# Check factor order:
+# levels(df$strain)
+# levels(summary_df$strain)
+# levels(sig_letters_df$strain)
+
+# Check if any letters failed to join:
+# summary_df %>% filter(is.na(letters))
