@@ -44,7 +44,7 @@ for genome in "${GENOMES[@]}"; do
         -m local \
         -db "${genome}.dmnd" \
         -qf t6ss1_vc.faa \
-        -s "${genome}_t6ss1.json"
+        -mi 60
 
     echo
 done
@@ -61,7 +61,7 @@ for genome in "${GENOMES[@]}"; do
         -m local \
         -db "${genome}.dmnd" \
         -qf t6ss2_vc.faa \
-        -s "${genome}_t6ss2.json"
+        -mi 60
 
     echo
 done
