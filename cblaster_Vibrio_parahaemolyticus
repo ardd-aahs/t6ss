@@ -49,7 +49,7 @@ for genome in "${GENOMES[@]}"; do
         -m local \
         -db "${genome}.dmnd" \
         -qf "${QUERY_T6SS1}" \
-        -s "${genome}_t6ss1_vp.json"
+        -mi 60
 
     echo "Results saved to ${genome}_t6ss1_vp.json"
     echo
@@ -67,7 +67,7 @@ for genome in "${GENOMES[@]}"; do
         -m local \
         -db "${genome}.dmnd" \
         -qf "${QUERY_T6SS2}" \
-        -s "${genome}_t6ss2_vp.json"
+        -mi 60
 
     echo "Results saved to ${genome}_t6ss2_vp.json"
     echo
